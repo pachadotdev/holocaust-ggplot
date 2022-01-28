@@ -5,76 +5,81 @@ library(tidyverse)
 library(rvest)
 library(janitor)
 
-holocaust <- read_html("http://70.auschwitz.org/index.php?option=com_content&view=article&id=89&Itemid=173&lang=en")
-
-holocaust_tables <- holocaust %>% 
-  html_elements("table") %>% 
-  html_table()
-
-holocaust_tables <- map(
-  seq_along(holocaust_tables),
-  function(t) {
-    colnames(holocaust_tables[[t]]) <- make_clean_names(as.character(holocaust_tables[[t]][1,]))
-    holocaust_tables[[t]] <- holocaust_tables[[t]] %>% 
-      filter(row_number() > 1)
-  }
-)
-
-# tidy deportees/victims ----
-
-holocaust_tables[[1]] <- holocaust_tables[[1]] %>% 
-  select(-matches("perc")) %>% 
-  filter(nationality_category != "Total") %>% 
-  separate(number_of_deportees, c("number_of_deportees", "number_of_deportees_unit"),
-           sep = " ") %>% 
-  separate(number_of_victims, c("number_of_victims", "number_of_victims_unit"),
-           sep = " ") %>% 
-  mutate(
-    number_of_deportees = case_when(
-      number_of_deportees_unit == "million" ~ as.numeric(number_of_deportees) * 10^6,
-      number_of_deportees_unit == "thousand" ~ as.numeric(number_of_deportees) * 10^3
-    ),
-    
-    number_of_victims = gsub("[^0-9]", "", number_of_victims),
-    number_of_victims = case_when(
-      number_of_victims_unit == "million" ~ as.numeric(number_of_victims) * 10^6,
-      number_of_victims_unit == "thousand" ~ as.numeric(number_of_victims) * 10^3,
-      # the table contains 70-thousand for Poles
-      TRUE ~ as.numeric(number_of_victims) * 10^3
-    )
-  ) %>% 
-  select(-matches("unit"))
-
-holocaust_tables[[2]] <- holocaust_tables[[2]] %>% 
-  filter(country_of_origin != "Total") %>% 
-  separate(number, c("number", "number_unit"),
-           sep = " ") %>% 
-  mutate(
-    number = as.numeric(number),
-    number = case_when(
-      number_unit == "thousand" ~ number * 10^3,
-      # Norway = 690 deported
-      TRUE ~ number
-    )
-  ) %>% 
-  select(-matches("unit"))
-
-holocaust_tables[[3]] <- holocaust_tables[[3]] %>% 
-  filter(nationality != "Total") %>% 
-  separate(number, c("number", "number_unit"),
-           sep = " ") %>% 
-  mutate(
-    number = as.numeric(number),
-    number = case_when(
-      number_unit == "thousand" ~ number * 10^3,
-      # Yugoslavia, Ukraine, Other have no units
-      TRUE ~ number
-    )
-  ) %>% 
-  select(-matches("unit"))
-
 fout <- "holocaust_tables.rds"
-if (!file.exists(fout)) saveRDS(holocaust_tables, fout)
+
+if (!file.exists(fout)) {
+  holocaust <- read_html("http://70.auschwitz.org/index.php?option=com_content&view=article&id=89&Itemid=173&lang=en")
+  
+  holocaust_tables <- holocaust %>% 
+    html_elements("table") %>% 
+    html_table()
+  
+  holocaust_tables <- map(
+    seq_along(holocaust_tables),
+    function(t) {
+      colnames(holocaust_tables[[t]]) <- make_clean_names(as.character(holocaust_tables[[t]][1,]))
+      holocaust_tables[[t]] <- holocaust_tables[[t]] %>% 
+        filter(row_number() > 1)
+    }
+  )
+  
+  # tidy deportees/victims ----
+  
+  holocaust_tables[[1]] <- holocaust_tables[[1]] %>% 
+    select(-matches("perc")) %>% 
+    filter(nationality_category != "Total") %>% 
+    separate(number_of_deportees, c("number_of_deportees", "number_of_deportees_unit"),
+             sep = " ") %>% 
+    separate(number_of_victims, c("number_of_victims", "number_of_victims_unit"),
+             sep = " ") %>% 
+    mutate(
+      number_of_deportees = case_when(
+        number_of_deportees_unit == "million" ~ as.numeric(number_of_deportees) * 10^6,
+        number_of_deportees_unit == "thousand" ~ as.numeric(number_of_deportees) * 10^3
+      ),
+      
+      number_of_victims = gsub("[^0-9]", "", number_of_victims),
+      number_of_victims = case_when(
+        number_of_victims_unit == "million" ~ as.numeric(number_of_victims) * 10^6,
+        number_of_victims_unit == "thousand" ~ as.numeric(number_of_victims) * 10^3,
+        # the table contains 70-thousand for Poles
+        TRUE ~ as.numeric(number_of_victims) * 10^3
+      )
+    ) %>% 
+    select(-matches("unit"))
+  
+  holocaust_tables[[2]] <- holocaust_tables[[2]] %>% 
+    filter(country_of_origin != "Total") %>% 
+    separate(number, c("number", "number_unit"),
+             sep = " ") %>% 
+    mutate(
+      number = as.numeric(number),
+      number = case_when(
+        number_unit == "thousand" ~ number * 10^3,
+        # Norway = 690 deported
+        TRUE ~ number
+      )
+    ) %>% 
+    select(-matches("unit"))
+  
+  holocaust_tables[[3]] <- holocaust_tables[[3]] %>% 
+    filter(nationality != "Total") %>% 
+    separate(number, c("number", "number_unit"),
+             sep = " ") %>% 
+    mutate(
+      number = as.numeric(number),
+      number = case_when(
+        number_unit == "thousand" ~ number * 10^3,
+        # Yugoslavia, Ukraine, Other have no units
+        TRUE ~ number
+      )
+    ) %>% 
+    select(-matches("unit"))
+  
+  saveRDS(holocaust_tables, fout)
+} else {
+  holocaust_tables <- read_rds(fout)
+}
 
 # create plots ----
 
